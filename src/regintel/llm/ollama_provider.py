@@ -76,7 +76,16 @@ class OllamaProvider:
         }
         data = self._post_chat(payload)
         content = data["message"]["content"]
+        # Strip markdown code fences that some models emit despite `format` being set.
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            lines = stripped.splitlines()
+            # Drop opening fence (```json or ```) and closing fence (```)
+            inner = lines[1:] if lines[0].startswith("```") else lines
+            if inner and inner[-1].strip() == "```":
+                inner = inner[:-1]
+            stripped = "\n".join(inner)
         try:
-            return json.loads(content)
+            return json.loads(stripped)
         except json.JSONDecodeError as exc:
             raise LLMError(f"Ollama returned non-JSON structured content: {content!r}") from exc

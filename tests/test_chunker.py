@@ -1,4 +1,4 @@
-from regintel.ingest.chunker import Chunk, chunk_text
+from regintel.ingest.chunker import chunk_text
 
 
 def test_chunk_text_indices_sequential():

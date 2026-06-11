@@ -51,9 +51,11 @@ def rerank(
         [ChatMessage("system", _SYSTEM), ChatMessage("user", user)],
         schema=_RERANK_SCHEMA, model=model,
     )
+    # Tolerate models returning a bare list instead of {"ranking": [...]}.
+    ranking_items = result if isinstance(result, list) else result.get("ranking", [])
     ordered: list[RetrievedChunk] = []
     seen: set[int] = set()
-    for item in result.get("ranking", []):
+    for item in ranking_items:
         idx = item.get("index")
         if not isinstance(idx, int) or idx < 0 or idx >= len(chunks) or idx in seen:
             continue
