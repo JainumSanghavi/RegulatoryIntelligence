@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# uv
+.uv/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+
+# Models / data (kept out of git; pulled/generated locally)
+models/
+data/raw/
+data/cache/
+qdrant_storage/
+*.gguf
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Logs
+*.log
+logs/
