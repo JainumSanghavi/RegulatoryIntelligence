@@ -61,4 +61,9 @@ def rerank(
         chunk = chunks[idx]
         chunk.rerank_rationale = item.get("rationale")
         ordered.append(chunk)
+    # Safety net: if the model returned no usable ranking (empty/garbage),
+    # degrade gracefully to the original hybrid order rather than dropping
+    # every result. Chunks the model explicitly omitted are still dropped.
+    if not ordered:
+        return chunks[:top_k]
     return ordered[:top_k]

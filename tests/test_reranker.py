@@ -31,3 +31,17 @@ def test_rerank_ignores_out_of_range_indices():
     provider = _FakeProvider({"ranking": [{"index": 99, "rationale": "x"}, {"index": 0, "rationale": "y"}]})
     out = rerank("q", _chunks(), provider=provider, model="m", top_k=5)
     assert [c.doc_id for c in out] == ["d1"]
+
+
+def test_rerank_empty_ranking_falls_back_to_original_order():
+    # Model returned no usable indices: degrade gracefully to hybrid order
+    # rather than nuking the query's results.
+    provider = _FakeProvider({"ranking": []})
+    out = rerank("q", _chunks(), provider=provider, model="m", top_k=5)
+    assert [c.doc_id for c in out] == ["d1", "d2"]
+
+
+def test_rerank_all_invalid_indices_falls_back():
+    provider = _FakeProvider({"ranking": [{"index": 99, "rationale": "x"}]})
+    out = rerank("q", _chunks(), provider=provider, model="m", top_k=1)
+    assert [c.doc_id for c in out] == ["d1"]
