@@ -16,14 +16,6 @@ dependencies = [
     "tenacity>=8.3",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.2",
-    "pytest-asyncio>=0.23",
-    "respx>=0.21",
-    "ruff>=0.5",
-]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -36,3 +28,11 @@ pythonpath = ["src"]
 markers = ["live: tests that require a running Ollama/Qdrant (deselected by default)"]
 addopts = "-m 'not live'"
 asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "respx>=0.23.1",
+    "ruff>=0.15.17",
+]
