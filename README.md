@@ -148,14 +148,14 @@ This is being built in phases; each phase is independently testable.
 | **1** | Ingestion + retrieval spine: SEC EDGAR client, hybrid search + RRF, LLM reranker, `RetrieverAgent` | ✅ **Done** |
 | **2** | Orchestration + reasoning: LangGraph graph with dynamic query-type routing, Orchestrator, Analyst, Impact Assessor, Reporter | ✅ **Done** |
 | **3** | Evaluation: Evaluator agent (RAGAS-style LLM-as-judge) — faithfulness, citation coverage, conflict detection; low-confidence flagging | ✅ **Done** |
-| 4 | Monitor + scheduling: APScheduler SEC polling, diff detection, change-log | 🔜 Next |
-| 5 | API + UI: FastAPI endpoints, minimal web UI, demo polish | ⬜ Planned |
+| **4** | Monitor + scheduling: APScheduler SEC polling, new-filing detection, auto-ingest into the corpus, `regulation_changelog` | ✅ **Done** |
+| 5 | API + UI: FastAPI endpoints, minimal web UI, demo polish | 🔜 Next |
 
-**What works today:** the full multi-agent pipeline. Ingest **full-text live SEC filings** + synthetic internal docs, then ask a compliance question and get back a **classified, grounded, cited report**: the Orchestrator routes by query type (LOOKUP / GAP_CHECK / IMPACT), the Retriever does hybrid search + LLM rerank, the Analyst extracts clauses and finds gaps, the ImpactAssessor (frontier model) scores severity and affected policies, the Reporter writes the answer with inline citations resolved to real passages, and the **Evaluator** (frontier model) grades it for faithfulness, citation coverage, and cross-chunk conflicts — flagging low-confidence answers. 88 automated tests pass, plus live end-to-end tests against real models. Example — *"Does our insider trading policy comply with SEC blackout window requirements?"* returns: **GAP_CHECK → "No"**, citing real DocuSign/SentinelOne SEC insider-trading policies and the internal ACME policy, with a **high-severity** impact on the affected internal policy.
+**What works today:** the full multi-agent pipeline. Ingest **full-text live SEC filings** + synthetic internal docs, then ask a compliance question and get back a **classified, grounded, cited report**: the Orchestrator routes by query type (LOOKUP / GAP_CHECK / IMPACT), the Retriever does hybrid search + LLM rerank, the Analyst extracts clauses and finds gaps, the ImpactAssessor (frontier model) scores severity and affected policies, the Reporter writes the answer with inline citations resolved to real passages, and the **Evaluator** (frontier model) grades it for faithfulness, citation coverage, and cross-chunk conflicts — flagging low-confidence answers. Separately, a scheduled **Monitor** polls SEC EDGAR, detects filings it hasn't seen, auto-ingests them into the corpus (so the query pipeline picks them up immediately), and records each in a searchable `regulation_changelog` with an LLM "what's new" summary. 99 automated tests pass, plus live end-to-end tests against real models. Example — *"Does our insider trading policy comply with SEC blackout window requirements?"* returns: **GAP_CHECK → "No"**, citing real DocuSign/SentinelOne SEC insider-trading policies and the internal ACME policy, with a **high-severity** impact on the affected internal policy.
 
 **Engineering note (Ollama Cloud structured output):** Ollama *Cloud* models do not enforce the `format` JSON-schema parameter the way local models do. The LLM provider therefore embeds the schema directly in the prompt and parses the result robustly (fence-stripping + balanced-JSON extraction), so structured outputs (classifications, findings, severity scores, citations) stay reliable on cloud-served open models.
 
-> Note: the full query-time pipeline — Orchestrator, Retriever, Analyst, Impact Assessor, Reporter, **and Evaluator** — is implemented today. The scheduled Monitor (Phase 4) is designed and on the roadmap below.
+> Note: the full query-time pipeline — Orchestrator, Retriever, Analyst, Impact Assessor, Reporter, Evaluator — **and the scheduled Monitor** are all implemented today. Only the API + UI layer (Phase 5) remains.
 
 Design specs and the task-by-task implementation plan live in [`docs/superpowers/`](docs/superpowers/).
 
@@ -191,6 +191,11 @@ uv run python -m regintel.cli ask \
 # Or just the raw retrieval layer (ranked, reranked passages with rationales)
 uv run python -m regintel.cli query \
   "What are our obligations around insider trading?" --jurisdiction US-SEC
+
+# Monitor: poll SEC once, auto-ingest new filings, record what changed
+uv run python -m regintel.cli monitor --once --query "insider trading policy" --forms 8-K
+uv run python -m regintel.cli changelog            # list recently detected changes
+# (omit --once to run the APScheduler loop: monitor --interval 3600)
 ```
 
 ## 8. Tests
@@ -211,11 +216,13 @@ src/regintel/
   types.py             # shared retrieval types
   llm/                 # pluggable provider layer (Ollama, Claude, role router)
   embeddings/          # bge-m3 dense + FastEmbed BM25 sparse
-  store/               # Qdrant schema + hybrid RRF search
+  store/               # Qdrant schema + hybrid RRF search + changelog store
   ingest/              # SEC EDGAR client, internal docs, chunker, pipeline
   rerank/              # LLM listwise reranker
-  agents/              # RetrieverAgent (more agents in Phase 2+)
-  cli.py               # ingest / query commands
+  agents/              # Orchestrator, Retriever, Analyst, ImpactAssessor, Reporter, Evaluator
+  orchestration/       # LangGraph nodes + graph (classify -> retrieve -> analyze -> assess -> report -> evaluate)
+  monitoring/          # MonitorAgent + APScheduler scheduler
+  cli.py               # ingest / query / ask / monitor / changelog commands
 data/internal/         # synthetic compliance corpus (tracked)
 docs/superpowers/      # design specs + implementation plans
 tests/                 # unit, integration, and live tests
