@@ -22,13 +22,24 @@ env/
 .ruff_cache/
 .mypy_cache/
 .cache/
+.coverage
+htmlcov/
 
-# Models / data (kept out of git; pulled/generated locally)
+# Model caches (FastEmbed BM25 / ONNX, HuggingFace, tiktoken)
+fastembed_cache/
+.fastembed_cache/
+.hf_cache/
+
+# Models / data (kept out of git; pulled/generated locally).
+# NOTE: data/internal/ IS tracked (synthetic corpus) — only raw/cache are ignored.
 models/
 data/raw/
 data/cache/
 qdrant_storage/
 *.gguf
+
+# Frontend (future Phase 5 UI)
+node_modules/
 
 # Notebooks
 .ipynb_checkpoints/
