@@ -37,3 +37,8 @@ def test_ask_live_gap_check():
                        graph=graph)
     assert report.answer
     assert report.query_type is not None
+    # Regression guard: the structured-output pipeline must actually parse JSON.
+    # (Ollama Cloud ignores `format`; the provider embeds the schema in the prompt.)
+    assert not any("non-JSON" in w for w in report.warnings), report.warnings
+    # A real gap-check against a blackout-window doc should surface at least one finding.
+    assert report.findings

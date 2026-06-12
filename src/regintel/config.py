@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     ollama_host: str = "http://localhost:11434"
     ollama_chat_model: str = "gpt-oss:120b-cloud"
     ollama_embed_model: str = "bge-m3"
-    ollama_frontier_model: str = "kimi-k2.6"
+    ollama_frontier_model: str = "kimi-k2.6:cloud"
 
     anthropic_api_key: str | None = None
 
