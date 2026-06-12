@@ -93,3 +93,13 @@ class Report:
     findings: list[Finding] = field(default_factory=list)
     impacts: list[Impact] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    eval: "EvalScores | None" = None
+
+
+@dataclass
+class EvalScores:
+    faithfulness: float        # 0..1 — fraction of answer claims supported by cited passages
+    citation_coverage: float   # 0..1 — fraction of answer claims carrying a citation
+    conflicts: list[str]       # cross-chunk contradictions (empty = none)
+    flagged: bool              # below threshold OR conflicts present
+    notes: str                 # brief judge rationale

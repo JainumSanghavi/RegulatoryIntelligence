@@ -1,7 +1,7 @@
 from typing import Any, TypedDict
 
 from regintel.types import (
-    Finding, Impact, QueryType, Report, RetrievalFilters, RetrievedChunk,
+    EvalScores, Finding, Impact, QueryType, Report, RetrievalFilters, RetrievedChunk,
 )
 
 
@@ -16,7 +16,7 @@ class AgentState(TypedDict, total=False):
     analyst_findings: list[Finding]
     impact_assessments: list[Impact]
     report: Report | None
-    eval_scores: dict[str, Any] | None   # Phase 3
+    eval_scores: EvalScores | None   # Phase 3
     errors: list[str]
     messages: list[dict[str, Any]]
 
