@@ -18,6 +18,10 @@ class _StubProvider:
             return {"impacts": [{"topic": "blackout windows",
                                  "affected_policies": ["Insider Policy"],
                                  "severity": "high", "rationale": "material"}]}
+        if "claims" in props:
+            return {"claims": [{"claim": "Gap in blackout windows", "supported": True, "has_citation": True}]}
+        if "conflicts" in props:
+            return {"conflicts": []}
         return {"answer": "Gap in blackout windows [0].", "cited_indices": [0]}
 
 
@@ -31,6 +35,7 @@ class _Retriever:
 
 def test_end_to_end_gap_check_report():
     from regintel.agents.analyst import Analyst
+    from regintel.agents.evaluator import Evaluator
     from regintel.agents.impact_assessor import ImpactAssessor
     from regintel.agents.orchestrator import Orchestrator
     from regintel.agents.reporter import Reporter
@@ -40,6 +45,7 @@ def test_end_to_end_gap_check_report():
         retriever=_Retriever(),
         orchestrator=Orchestrator(p, "m"), analyst=Analyst(p, "m"),
         assessor=ImpactAssessor(p, "m"), reporter=Reporter(p, "m"),
+        evaluator=Evaluator(p, "m"),
     )
     report = run_query("Does our insider policy comply?", graph=graph)
     assert isinstance(report, Report)
@@ -48,3 +54,6 @@ def test_end_to_end_gap_check_report():
     assert report.impacts and report.impacts[0].severity == "high"
     assert report.citations  # at least one resolved citation
     assert "blackout" in report.answer.lower()
+    assert report.eval is not None
+    assert 0.0 <= report.eval.faithfulness <= 1.0
+    assert report.eval.faithfulness == 1.0

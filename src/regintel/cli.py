@@ -75,6 +75,13 @@ def cmd_ask(args) -> None:
         print("\nImpacts:")
         for im in report.impacts:
             print(f"  - {im.topic}: severity={im.severity}; policies={im.affected_policies}")
+    if report.eval is not None:
+        e = report.eval
+        flag = "  [⚠ FLAGGED]" if e.flagged else ""
+        print(f"\nEvaluation: faithfulness={e.faithfulness:.2f}  "
+              f"citation_coverage={e.citation_coverage:.2f}  conflicts={len(e.conflicts)}{flag}")
+        for c in e.conflicts:
+            print(f"  conflict: {c}")
     if report.warnings:
         print("\nWarnings:")
         for w in report.warnings:

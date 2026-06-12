@@ -42,3 +42,6 @@ def test_ask_live_gap_check():
     assert not any("non-JSON" in w for w in report.warnings), report.warnings
     # A real gap-check against a blackout-window doc should surface at least one finding.
     assert report.findings
+    assert report.eval is not None
+    assert 0.0 <= report.eval.faithfulness <= 1.0
+    assert 0.0 <= report.eval.citation_coverage <= 1.0
