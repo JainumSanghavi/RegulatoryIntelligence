@@ -146,14 +146,16 @@ This is being built in phases; each phase is independently testable.
 |---|---|---|
 | **0** | Foundations: config, pluggable LLM layer, typed `AgentState`, Qdrant schema | ✅ **Done** |
 | **1** | Ingestion + retrieval spine: SEC EDGAR client, hybrid search + RRF, LLM reranker, `RetrieverAgent` | ✅ **Done** |
-| 2 | Orchestration + reasoning: LangGraph graph, Analyst, Impact Assessor, Reporter | 🔜 Next |
-| 3 | Evaluation: Evaluator agent (RAGAS + LLM-as-judge), faithfulness gate | ⬜ Planned |
+| **2** | Orchestration + reasoning: LangGraph graph with dynamic query-type routing, Orchestrator, Analyst, Impact Assessor, Reporter | ✅ **Done** |
+| 3 | Evaluation: Evaluator agent (RAGAS + LLM-as-judge), faithfulness gate | 🔜 Next |
 | 4 | Monitor + scheduling: APScheduler SEC polling, diff detection, change-log | ⬜ Planned |
 | 5 | API + UI: FastAPI endpoints, minimal web UI, demo polish | ⬜ Planned |
 
-**What works today:** the full retrieval spine — ingest **full-text live SEC filings** (real filing bodies, fetched and cached from EDGAR) + synthetic internal docs into Qdrant, then ask a question and get back ranked, jurisdiction-filtered, LLM-reranked passages with metadata and relevance rationales. 45 automated tests pass, plus a live end-to-end test against real models. Example: a query about insider-trading blackout windows surfaces the relevant clauses from real public companies' insider-trading policies, each with a one-line relevance rationale.
+**What works today:** the full multi-agent pipeline. Ingest **full-text live SEC filings** + synthetic internal docs, then ask a compliance question and get back a **classified, grounded, cited report**: the Orchestrator routes by query type (LOOKUP / GAP_CHECK / IMPACT), the Retriever does hybrid search + LLM rerank, the Analyst extracts clauses and finds gaps, the ImpactAssessor (frontier model) scores severity and affected policies, and the Reporter writes the answer with inline citations resolved to real passages. 75 automated tests pass, plus live end-to-end tests against real models. Example — *"Does our insider trading policy comply with SEC blackout window requirements?"* returns: **GAP_CHECK → "No"**, citing real DocuSign/SentinelOne SEC insider-trading policies and the internal ACME policy, with a **high-severity** impact on the affected internal policy.
 
-> Note: the agents shown in §3 beyond the Retriever (Analyst, Impact Assessor, Reporter, Evaluator, Monitor, Orchestrator) are the designed architecture; they are implemented across Phases 2–4. The retrieval foundation they all build on is complete today.
+**Engineering note (Ollama Cloud structured output):** Ollama *Cloud* models do not enforce the `format` JSON-schema parameter the way local models do. The LLM provider therefore embeds the schema directly in the prompt and parses the result robustly (fence-stripping + balanced-JSON extraction), so structured outputs (classifications, findings, severity scores, citations) stay reliable on cloud-served open models.
+
+> Note: the Orchestrator, Retriever, Analyst, Impact Assessor, and Reporter (the query-time pipeline) are implemented today. The Evaluator (Phase 3) and the scheduled Monitor (Phase 4) are designed and on the roadmap below.
 
 Design specs and the task-by-task implementation plan live in [`docs/superpowers/`](docs/superpowers/).
 
@@ -182,7 +184,11 @@ docker compose up -d            # or set QDRANT_EMBEDDED=true in .env to skip Do
 # Ingest live SEC filings + the synthetic internal corpus
 uv run python -m regintel.cli ingest --sec-query "insider trading policy" --sec-limit 5
 
-# Ask a question — get ranked, reranked passages with rationales
+# Full multi-agent report: classify -> retrieve -> analyze -> assess -> cited report
+uv run python -m regintel.cli ask \
+  "Does our insider trading policy comply with SEC blackout window requirements?"
+
+# Or just the raw retrieval layer (ranked, reranked passages with rationales)
 uv run python -m regintel.cli query \
   "What are our obligations around insider trading?" --jurisdiction US-SEC
 ```
