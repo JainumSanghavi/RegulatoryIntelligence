@@ -13,7 +13,9 @@ from regintel.ingest.sec_edgar import SECClient
 from regintel.ingest.sec_ingest import sec_query_to_docs
 from regintel.llm.ollama_provider import OllamaProvider
 from regintel.store.qdrant_store import QdrantStore
+from regintel.monitoring.scheduler import build_default_monitor, run_scheduler
 from regintel.orchestration.graph import build_default_graph, run_query
+from regintel.store.changelog_store import ChangelogStore
 from regintel.types import RetrievalFilters
 
 
@@ -88,6 +90,38 @@ def cmd_ask(args) -> None:
             print(f"  ! {w}")
 
 
+def cmd_monitor(args) -> None:
+    settings = get_settings()
+    monitor = build_default_monitor(settings)
+    forms = [f.strip() for f in args.forms.split(",") if f.strip()]
+    if args.once:
+        entries = monitor.poll(args.query, forms=forms, limit=args.limit)
+        if not entries:
+            print("No new filings.")
+            return
+        print(f"Detected {len(entries)} new filing(s):")
+        for e in entries:
+            print(f"  - [{e.form_type}] {e.title} ({e.filed_date})\n      {e.summary}")
+    else:
+        run_scheduler(monitor, query=args.query, forms=forms, limit=args.limit,
+                      interval_seconds=args.interval)
+
+
+def cmd_changelog(args) -> None:
+    from qdrant_client import QdrantClient
+    settings = get_settings()
+    client = (QdrantClient(path="./qdrant_storage") if settings.qdrant_embedded
+              else QdrantClient(url=settings.qdrant_url))
+    store = ChangelogStore(client=client)
+    store.ensure_collection()
+    entries = store.list_recent(limit=args.limit)
+    if not entries:
+        print("Changelog is empty.")
+        return
+    for e in entries:
+        print(f"[{e.detected_at}] ({e.form_type}) {e.title}\n    {e.summary}\n    {e.url or ''}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="regintel")
     sub = parser.add_subparsers(required=True)
@@ -103,6 +137,19 @@ def main() -> None:
     p_ask = sub.add_parser("ask")
     p_ask.add_argument("query")
     p_ask.set_defaults(func=cmd_ask)
+
+    p_mon = sub.add_parser("monitor")
+    p_mon.add_argument("--once", action="store_true", help="run a single poll and exit")
+    p_mon.add_argument("--query", default="insider trading policy")
+    p_mon.add_argument("--forms", default="8-K,10-K")
+    p_mon.add_argument("--limit", type=int, default=10)
+    p_mon.add_argument("--interval", type=int, default=3600, help="seconds between polls")
+    p_mon.set_defaults(func=cmd_monitor)
+
+    p_cl = sub.add_parser("changelog")
+    p_cl.add_argument("--limit", type=int, default=20)
+    p_cl.set_defaults(func=cmd_changelog)
+
     args = parser.parse_args()
     args.func(args)
 
