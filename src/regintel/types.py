@@ -103,3 +103,14 @@ class EvalScores:
     conflicts: list[str]       # cross-chunk contradictions (empty = none)
     flagged: bool              # below threshold OR conflicts present
     notes: str                 # brief judge rationale
+
+
+@dataclass
+class ChangelogEntry:
+    accession_no: str
+    title: str
+    form_type: str
+    filed_date: str
+    url: str | None
+    summary: str          # LLM one-line "what's new"
+    detected_at: str      # ISO timestamp (UTC)
