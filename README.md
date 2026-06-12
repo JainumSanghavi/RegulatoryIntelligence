@@ -147,15 +147,15 @@ This is being built in phases; each phase is independently testable.
 | **0** | Foundations: config, pluggable LLM layer, typed `AgentState`, Qdrant schema | ✅ **Done** |
 | **1** | Ingestion + retrieval spine: SEC EDGAR client, hybrid search + RRF, LLM reranker, `RetrieverAgent` | ✅ **Done** |
 | **2** | Orchestration + reasoning: LangGraph graph with dynamic query-type routing, Orchestrator, Analyst, Impact Assessor, Reporter | ✅ **Done** |
-| 3 | Evaluation: Evaluator agent (RAGAS + LLM-as-judge), faithfulness gate | 🔜 Next |
-| 4 | Monitor + scheduling: APScheduler SEC polling, diff detection, change-log | ⬜ Planned |
+| **3** | Evaluation: Evaluator agent (RAGAS-style LLM-as-judge) — faithfulness, citation coverage, conflict detection; low-confidence flagging | ✅ **Done** |
+| 4 | Monitor + scheduling: APScheduler SEC polling, diff detection, change-log | 🔜 Next |
 | 5 | API + UI: FastAPI endpoints, minimal web UI, demo polish | ⬜ Planned |
 
-**What works today:** the full multi-agent pipeline. Ingest **full-text live SEC filings** + synthetic internal docs, then ask a compliance question and get back a **classified, grounded, cited report**: the Orchestrator routes by query type (LOOKUP / GAP_CHECK / IMPACT), the Retriever does hybrid search + LLM rerank, the Analyst extracts clauses and finds gaps, the ImpactAssessor (frontier model) scores severity and affected policies, and the Reporter writes the answer with inline citations resolved to real passages. 75 automated tests pass, plus live end-to-end tests against real models. Example — *"Does our insider trading policy comply with SEC blackout window requirements?"* returns: **GAP_CHECK → "No"**, citing real DocuSign/SentinelOne SEC insider-trading policies and the internal ACME policy, with a **high-severity** impact on the affected internal policy.
+**What works today:** the full multi-agent pipeline. Ingest **full-text live SEC filings** + synthetic internal docs, then ask a compliance question and get back a **classified, grounded, cited report**: the Orchestrator routes by query type (LOOKUP / GAP_CHECK / IMPACT), the Retriever does hybrid search + LLM rerank, the Analyst extracts clauses and finds gaps, the ImpactAssessor (frontier model) scores severity and affected policies, the Reporter writes the answer with inline citations resolved to real passages, and the **Evaluator** (frontier model) grades it for faithfulness, citation coverage, and cross-chunk conflicts — flagging low-confidence answers. 88 automated tests pass, plus live end-to-end tests against real models. Example — *"Does our insider trading policy comply with SEC blackout window requirements?"* returns: **GAP_CHECK → "No"**, citing real DocuSign/SentinelOne SEC insider-trading policies and the internal ACME policy, with a **high-severity** impact on the affected internal policy.
 
 **Engineering note (Ollama Cloud structured output):** Ollama *Cloud* models do not enforce the `format` JSON-schema parameter the way local models do. The LLM provider therefore embeds the schema directly in the prompt and parses the result robustly (fence-stripping + balanced-JSON extraction), so structured outputs (classifications, findings, severity scores, citations) stay reliable on cloud-served open models.
 
-> Note: the Orchestrator, Retriever, Analyst, Impact Assessor, and Reporter (the query-time pipeline) are implemented today. The Evaluator (Phase 3) and the scheduled Monitor (Phase 4) are designed and on the roadmap below.
+> Note: the full query-time pipeline — Orchestrator, Retriever, Analyst, Impact Assessor, Reporter, **and Evaluator** — is implemented today. The scheduled Monitor (Phase 4) is designed and on the roadmap below.
 
 Design specs and the task-by-task implementation plan live in [`docs/superpowers/`](docs/superpowers/).
 
