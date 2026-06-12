@@ -89,3 +89,11 @@ def test_changelog_returns_entries():
     assert len(body) == 2
     assert body[0]["title"] == "Filing A"
     assert body[1]["url"] is None
+
+
+def test_index_serves_html():
+    r = _client().get("/")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert "Regulatory Intelligence" in r.text
+    assert "/ask" in r.text

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Regulatory Intelligence</title>
+<style>
+  :root { --bg:#0f1419; --panel:#1a212b; --line:#2a3542; --fg:#e6edf3; --muted:#8b97a6;
+          --accent:#4c8dff; --gap:#ff5d5d; --ok:#3fb950; --warn:#d29922; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:20px 28px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+  .wrap { display:grid; grid-template-columns:1fr 320px; gap:24px; padding:24px 28px; max-width:1200px; }
+  @media (max-width:880px){ .wrap{ grid-template-columns:1fr; } }
+  .ask { display:flex; gap:8px; margin-bottom:20px; }
+  .ask input { flex:1; padding:12px 14px; border-radius:8px; border:1px solid var(--line);
+               background:var(--panel); color:var(--fg); font-size:15px; }
+  .ask button { padding:12px 20px; border:0; border-radius:8px; background:var(--accent);
+                color:#fff; font-weight:600; cursor:pointer; }
+  .ask button:disabled { opacity:.5; cursor:default; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700;
+           letter-spacing:.04em; text-transform:uppercase; }
+  .badge.type { background:#23303f; color:var(--accent); }
+  .badge.gap { background:#3a1f24; color:var(--gap); }
+  .badge.ok { background:#16301f; color:var(--ok); }
+  .badge.sev-high,.badge.sev-critical { background:#3a1f24; color:var(--gap); }
+  .badge.sev-medium { background:#332a14; color:var(--warn); }
+  .badge.sev-low { background:#16301f; color:var(--ok); }
+  .answer { white-space:pre-wrap; margin:12px 0; }
+  .evalbar { display:flex; gap:18px; align-items:center; font-size:13px; color:var(--muted);
+             border-top:1px solid var(--line); padding-top:12px; margin-top:6px; flex-wrap:wrap; }
+  .evalbar b { color:var(--fg); }
+  h3 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:18px 0 8px; }
+  ul { margin:0; padding-left:0; list-style:none; }
+  li { margin:8px 0; }
+  .cite a { color:var(--accent); text-decoration:none; }
+  .src { font-size:11px; color:var(--muted); }
+  aside h2 { font-size:14px; margin:0 0 12px; }
+  .change { border-bottom:1px solid var(--line); padding:10px 0; font-size:13px; }
+  .change .t { font-weight:600; }
+  .change .m { color:var(--muted); font-size:12px; }
+  .spinner { display:none; color:var(--muted); }
+  .error { color:var(--gap); }
+  .muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Regulatory Intelligence</h1>
+  <p>Ask a compliance question — get a cited, self-evaluated report over live SEC filings + internal policies.</p>
+</header>
+<div class="wrap">
+  <main>
+    <div class="ask">
+      <input id="q" placeholder="e.g. Does our insider trading policy comply with SEC blackout rules?"
+             autocomplete="off" />
+      <button id="go">Ask</button>
+    </div>
+    <div id="spinner" class="spinner">Analyzing… (running the multi-agent pipeline, ~30–90s)</div>
+    <div id="error" class="error"></div>
+    <div id="result"></div>
+  </main>
+  <aside>
+    <h2>Recent regulatory changes</h2>
+    <div id="changes" class="muted">Loading…</div>
+  </aside>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+
+function badge(cls, text) { return `<span class="badge ${cls}">${text}</span>`; }
+function esc(s) { return (s||"").replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+async function ask() {
+  const q = $("q").value.trim();
+  if (!q) return;
+  $("go").disabled = true; $("spinner").style.display = "block";
+  $("error").textContent = ""; $("result").innerHTML = "";
+  try {
+    const res = await fetch("/ask", {method:"POST", headers:{"Content-Type":"application/json"},
+                                     body: JSON.stringify({query:q})});
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || res.status); }
+    render(await res.json());
+  } catch (err) {
+    $("error").textContent = "Error: " + err.message;
+  } finally {
+    $("go").disabled = false; $("spinner").style.display = "none";
+  }
+}
+
+function render(r) {
+  const ev = r.eval;
+  let evalbar = "";
+  if (ev) {
+    const flag = ev.flagged ? badge("gap","⚠ flagged") : badge("ok","✓ verified");
+    evalbar = `<div class="evalbar">
+      <span>Faithfulness <b>${(ev.faithfulness*100).toFixed(0)}%</b></span>
+      <span>Citation coverage <b>${(ev.citation_coverage*100).toFixed(0)}%</b></span>
+      <span>Conflicts <b>${ev.conflicts.length}</b></span>${flag}</div>`;
+  }
+  const cites = r.citations.map((c,i)=>`<li class="cite">[${i}] <span class="src">(${esc(c.source)})</span>
+      ${c.url ? `<a href="${esc(c.url)}" target="_blank">${esc(c.title)} ↗</a>` : esc(c.title)}</li>`).join("");
+  const findings = r.findings.map(f=>`<li>${badge(f.gap?"gap":"ok", f.gap?"gap":"ok")}
+      <b>${esc(f.topic)}</b> — ${esc(f.explanation)}</li>`).join("");
+  const impacts = r.impacts.map(i=>`<li>${badge("sev-"+esc(i.severity), esc(i.severity))}
+      <b>${esc(i.topic)}</b> — ${esc((i.affected_policies||[]).join(", "))}</li>`).join("");
+  $("result").innerHTML = `<div class="card">
+      ${badge("type", esc(r.query_type))}
+      <div class="answer">${esc(r.answer)}</div>${evalbar}</div>
+    ${cites ? `<h3>Citations</h3><ul>${cites}</ul>`:""}
+    ${findings ? `<h3>Findings</h3><ul>${findings}</ul>`:""}
+    ${impacts ? `<h3>Impacts</h3><ul>${impacts}</ul>`:""}`;
+}
+
+async function loadChanges() {
+  try {
+    const res = await fetch("/changelog?limit=10");
+    const items = await res.json();
+    if (!items.length) { $("changes").textContent = "No changes recorded yet."; return; }
+    $("changes").innerHTML = items.map(e=>`<div class="change">
+        <div class="t">${badge("type", esc(e.form_type))} ${esc(e.title)}</div>
+        <div class="m">${esc(e.filed_date)}</div>
+        <div>${esc(e.summary)}</div>
+        ${e.url ? `<a href="${esc(e.url)}" target="_blank" class="src">view filing ↗</a>`:""}</div>`).join("");
+  } catch { $("changes").textContent = "Changelog unavailable."; }
+}
+
+$("go").addEventListener("click", ask);
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") ask(); });
+loadChanges();
+</script>
+</body>
+</html>
