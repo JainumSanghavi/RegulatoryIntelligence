@@ -29,6 +29,32 @@ def test_parse_json_returns_none_on_pure_prose():
 
 
 @respx.mock
+def test_chat_structured_reprompts_once_on_bad_json():
+    # First reply is prose (unparseable); provider should reprompt and succeed.
+    responses = [
+        httpx.Response(200, json={"message": {"content": "I cannot comply."}}),
+        httpx.Response(200, json={"message": {"content": '{"ok": true}'}}),
+    ]
+    respx.post("http://localhost:11434/api/chat").mock(side_effect=responses)
+    p = OllamaProvider(host="http://localhost:11434", default_model="m")
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"]}
+    assert p.chat_structured([ChatMessage("user", "go")], schema=schema) == {"ok": True}
+
+
+@respx.mock
+def test_chat_structured_raises_after_two_bad_attempts():
+    from regintel.llm.base import LLMError
+    import pytest
+    respx.post("http://localhost:11434/api/chat").mock(
+        return_value=httpx.Response(200, json={"message": {"content": "still not json"}})
+    )
+    p = OllamaProvider(host="http://localhost:11434", default_model="m")
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"]}
+    with pytest.raises(LLMError):
+        p.chat_structured([ChatMessage("user", "go")], schema=schema)
+
+
+@respx.mock
 def test_chat_structured_embeds_schema_in_prompt():
     captured = {}
 

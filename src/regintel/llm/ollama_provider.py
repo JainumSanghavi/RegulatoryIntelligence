@@ -72,11 +72,15 @@ class OllamaProvider:
         *,
         timeout: float = 120.0,
         max_retries: int = 3,
+        max_output_tokens: int = 8192,
     ) -> None:
         self._host = host.rstrip("/")
         self._default_model = default_model
         self._timeout = timeout
         self._max_retries = max_retries
+        # Generous output cap so large structured outputs (e.g. multi-finding
+        # analyses) are not truncated into unparseable JSON.
+        self._max_output_tokens = max_output_tokens
 
     def _post_chat(self, payload: dict[str, Any]) -> dict[str, Any]:
         @retry(
@@ -108,7 +112,7 @@ class OllamaProvider:
             "model": model or self._default_model,
             "messages": _normalize(messages),
             "stream": False,
-            "options": {"temperature": temperature},
+            "options": {"temperature": temperature, "num_predict": self._max_output_tokens},
         }
         data = self._post_chat(payload)
         return data["message"]["content"]
@@ -134,16 +138,25 @@ class OllamaProvider:
                 + json.dumps(schema)
             ),
         })
-        payload = {
-            "model": model or self._default_model,
-            "messages": msgs,
-            "stream": False,
-            "format": schema,
-            "options": {"temperature": temperature},
-        }
-        data = self._post_chat(payload)
-        content = data["message"]["content"]
-        parsed = _parse_json(content)
-        if parsed is None:
-            raise LLMError(f"Ollama returned non-JSON structured content: {content!r}")
-        return parsed
+        # Try up to twice: cloud models occasionally emit prose/partial JSON. On a
+        # parse miss, reprompt once with a stricter correction before giving up.
+        last_content = ""
+        for attempt in range(2):
+            attempt_msgs = msgs
+            if attempt == 1:
+                attempt_msgs = msgs + [{
+                    "role": "user",
+                    "content": "Your previous reply was not valid JSON. Output ONLY the JSON value now, nothing else.",
+                }]
+            payload = {
+                "model": model or self._default_model,
+                "messages": attempt_msgs,
+                "stream": False,
+                "format": schema,
+                "options": {"temperature": temperature, "num_predict": self._max_output_tokens},
+            }
+            last_content = self._post_chat(payload)["message"]["content"]
+            parsed = _parse_json(last_content)
+            if parsed is not None:
+                return parsed
+        raise LLMError(f"Ollama returned non-JSON structured content: {last_content!r}")
