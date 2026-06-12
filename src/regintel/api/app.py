@@ -66,23 +66,43 @@ def _serialize_changelog(e: ChangelogEntry) -> dict:
 
 def create_app(*, graph=None, changelog_store=None) -> FastAPI:
     app = FastAPI(title="Regulatory Intelligence")
-    state: dict = {"graph": graph, "changelog": changelog_store}
+    state: dict = {"graph": graph, "changelog": changelog_store, "client": None}
+
+    def _client():
+        # One shared Qdrant client for both graph + changelog. Embedded/local mode
+        # forbids two clients on the same path, so the default wiring must share one.
+        if state["client"] is None:
+            from qdrant_client import QdrantClient
+            from regintel.config import get_settings
+            s = get_settings()
+            state["client"] = (QdrantClient(path="./qdrant_storage") if s.qdrant_embedded
+                               else QdrantClient(url=s.qdrant_url))
+        return state["client"]
 
     def _get_graph():
         if state["graph"] is None:
+            from regintel.agents.retriever import RetrieverAgent
+            from regintel.config import get_settings
+            from regintel.embeddings.ollama_embedder import OllamaEmbedder
+            from regintel.embeddings.sparse import BM25Encoder
+            from regintel.llm.ollama_provider import OllamaProvider
             from regintel.orchestration.graph import build_default_graph
-            state["graph"] = build_default_graph()
+            from regintel.store.qdrant_store import QdrantStore
+            s = get_settings()
+            provider = OllamaProvider(host=s.ollama_host, default_model=s.ollama_chat_model)
+            retriever = RetrieverAgent(
+                store=QdrantStore(client=_client()),
+                dense=OllamaEmbedder(host=s.ollama_host, model=s.ollama_embed_model),
+                sparse=BM25Encoder(), provider=provider,
+                rerank_model=s.ollama_chat_model,
+            )
+            state["graph"] = build_default_graph(s, retriever=retriever, provider=provider)
         return state["graph"]
 
     def _get_changelog():
         if state["changelog"] is None:
-            from qdrant_client import QdrantClient
-            from regintel.config import get_settings
             from regintel.store.changelog_store import ChangelogStore
-            s = get_settings()
-            client = (QdrantClient(path="./qdrant_storage") if s.qdrant_embedded
-                      else QdrantClient(url=s.qdrant_url))
-            store = ChangelogStore(client=client)
+            store = ChangelogStore(client=_client())
             store.ensure_collection()
             state["changelog"] = store
         return state["changelog"]

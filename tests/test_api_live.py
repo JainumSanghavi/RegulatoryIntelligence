@@ -8,6 +8,9 @@ def test_ask_endpoint_live():
     from regintel.api.app import create_app
 
     client = TestClient(create_app())
+    # Hit /changelog first, THEN /ask: in embedded Qdrant mode both endpoints must
+    # share one client (a second client on the same path raises). Regression guard.
+    assert client.get("/changelog?limit=5").status_code == 200
     r = client.post("/ask", json={"query": "What are insider trading blackout window rules?"})
     assert r.status_code == 200
     body = r.json()
