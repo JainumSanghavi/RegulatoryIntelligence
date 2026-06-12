@@ -107,6 +107,12 @@ def cmd_monitor(args) -> None:
                       interval_seconds=args.interval)
 
 
+def cmd_serve(args) -> None:
+    import uvicorn
+    from regintel.api.app import create_app
+    uvicorn.run(create_app(), host=args.host, port=args.port)
+
+
 def cmd_changelog(args) -> None:
     from qdrant_client import QdrantClient
     settings = get_settings()
@@ -149,6 +155,11 @@ def main() -> None:
     p_cl = sub.add_parser("changelog")
     p_cl.add_argument("--limit", type=int, default=20)
     p_cl.set_defaults(func=cmd_changelog)
+
+    p_srv = sub.add_parser("serve")
+    p_srv.add_argument("--host", default="127.0.0.1")
+    p_srv.add_argument("--port", type=int, default=8000)
+    p_srv.set_defaults(func=cmd_serve)
 
     args = parser.parse_args()
     args.func(args)
