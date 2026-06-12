@@ -1,5 +1,5 @@
 from regintel.state import AgentState
-from regintel.types import QueryType, Report, RetrievalFilters
+from regintel.types import EvalScores, QueryType, Report, RetrievalFilters
 
 
 def _append_error(state: AgentState, msg: str) -> list[str]:
@@ -74,6 +74,22 @@ def make_report_node(reporter):
                             warnings=[f"report: {exc}"])
         report.warnings = list(report.warnings) + list(state.get("errors", []))
         return {"report": report}
+    return node
+
+
+def make_evaluate_node(evaluator):
+    def node(state: AgentState) -> dict:
+        report = state.get("report")
+        if report is None:
+            return {}
+        try:
+            scores = evaluator.evaluate(state.get("query", ""), report)
+        except Exception as exc:  # noqa: BLE001
+            scores = EvalScores(0.0, 0.0, [], flagged=True, notes=f"evaluation failed: {exc}")
+        report.eval = scores
+        if scores.flagged:
+            report.warnings = list(report.warnings) + [f"low-confidence: {scores.notes}"]
+        return {"eval_scores": scores, "report": report}
     return node
 
 

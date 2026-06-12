@@ -43,6 +43,12 @@ class _RecordingAssessor:
         return []
 
 
+class _NoopEvaluator:
+    def evaluate(self, query, report):
+        from regintel.types import EvalScores
+        return EvalScores(1.0, 1.0, [], flagged=False, notes="ok")
+
+
 class _FakeReporter:
     def report(self, query, query_type, findings, impacts, regs, internal):
         return Report(query_type=query_type, answer="report", findings=findings)
@@ -62,6 +68,7 @@ def _build(qt, regs, findings):
         analyst=analyst,
         assessor=assessor,
         reporter=_FakeReporter(),
+        evaluator=_NoopEvaluator(),
     )
     return graph, analyst, assessor
 
