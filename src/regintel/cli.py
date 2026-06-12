@@ -13,6 +13,7 @@ from regintel.ingest.sec_edgar import SECClient
 from regintel.ingest.sec_ingest import sec_query_to_docs
 from regintel.llm.ollama_provider import OllamaProvider
 from regintel.store.qdrant_store import QdrantStore
+from regintel.orchestration.graph import build_default_graph, run_query
 from regintel.types import RetrievalFilters
 
 
@@ -55,6 +56,31 @@ def cmd_query(args) -> None:
             print(f"   why: {c.rerank_rationale}")
 
 
+def cmd_ask(args) -> None:
+    settings = get_settings()
+    graph = build_default_graph(settings)
+    report = run_query(args.query, graph=graph)
+    print(f"\n=== {report.query_type.value.upper()} ===")
+    print(report.answer)
+    if report.citations:
+        print("\nCitations:")
+        for i, c in enumerate(report.citations):
+            loc = c.url or f"{c.doc_id}#{c.chunk_index}"
+            print(f"  [{i}] ({c.source}) {c.title} — {loc}")
+    if report.findings:
+        print("\nFindings:")
+        for f in report.findings:
+            print(f"  - {f.topic}: {'GAP' if f.gap else 'ok'} — {f.explanation}")
+    if report.impacts:
+        print("\nImpacts:")
+        for im in report.impacts:
+            print(f"  - {im.topic}: severity={im.severity}; policies={im.affected_policies}")
+    if report.warnings:
+        print("\nWarnings:")
+        for w in report.warnings:
+            print(f"  ! {w}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="regintel")
     sub = parser.add_subparsers(required=True)
@@ -67,6 +93,9 @@ def main() -> None:
     p_q.add_argument("--jurisdiction", default=None)
     p_q.add_argument("--source", default=None)
     p_q.set_defaults(func=cmd_query)
+    p_ask = sub.add_parser("ask")
+    p_ask.add_argument("query")
+    p_ask.set_defaults(func=cmd_ask)
     args = parser.parse_args()
     args.func(args)
 
