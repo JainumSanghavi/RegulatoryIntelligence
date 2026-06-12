@@ -10,6 +10,7 @@ from regintel.embeddings.sparse import BM25Encoder
 from regintel.ingest.internal_docs import load_internal_docs
 from regintel.ingest.pipeline import DocInput, ingest_documents
 from regintel.ingest.sec_edgar import SECClient
+from regintel.ingest.sec_ingest import sec_query_to_docs
 from regintel.llm.ollama_provider import OllamaProvider
 from regintel.store.qdrant_store import QdrantStore
 from regintel.types import RetrievalFilters
@@ -34,12 +35,7 @@ def cmd_ingest(args) -> None:
         docs.append(DocInput(doc_id=d.doc_id, title=d.title, text=d.text, source=d.source,
                              jurisdiction=d.jurisdiction, doc_type=d.doc_type))
     sec = SECClient(user_agent=settings.sec_user_agent, cache_dir=Path("data/cache"))
-    for hit in sec.full_text_search(args.sec_query, forms=["8-K", "10-K"], limit=args.sec_limit):
-        docs.append(DocInput(doc_id=hit.accession_no or hit.title, title=hit.title,
-                             text=f"{hit.title} {hit.form_type} filed {hit.filed_date}",
-                             source="sec", jurisdiction="US-SEC", doc_type="filing",
-                             form_type=hit.form_type, accession_no=hit.accession_no,
-                             filed_date=hit.filed_date))
+    docs.extend(sec_query_to_docs(sec, args.sec_query, forms=["8-K", "10-K"], limit=args.sec_limit))
     n = ingest_documents(docs, store=store, dense=dense, sparse=sparse)
     print(f"Ingested {n} chunks from {len(docs)} documents.")
 

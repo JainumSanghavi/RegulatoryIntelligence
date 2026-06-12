@@ -47,3 +47,31 @@ def test_full_text_search_parses_hits():
     assert isinstance(hits[0], SECFiling)
     assert hits[0].form_type == "8-K"
     assert hits[0].filed_date == "2026-05-01"
+    # No `ciks` in source -> cannot build a document URL; degrade gracefully.
+    assert hits[0].doc_url is None
+
+
+def test_build_doc_url_strips_dashes_and_leading_zeros():
+    url = SECClient.build_doc_url(
+        cik="0001554225", accession_no="0001604232-14-000006", filename="ex10_7.htm"
+    )
+    assert url == "https://www.sec.gov/Archives/edgar/data/1554225/000160423214000006/ex10_7.htm"
+
+
+@respx.mock
+def test_full_text_search_builds_doc_url_from_ciks():
+    respx.get(url__startswith="https://efts.sec.gov/LATEST/search-index").mock(
+        return_value=httpx.Response(200, json={
+            "hits": {"hits": [
+                {"_id": "0001604232-14-000006:ex10_7.htm",
+                 "_source": {"display_names": ["Pladeo Corp. (CIK 0001554225)"],
+                             "ciks": ["0001554225"], "form": "8-K", "file_date": "2014-04-04"}}
+            ]}
+        })
+    )
+    client = SECClient(user_agent="Tester test@example.com")
+    hit = client.full_text_search("insider trading", forms=["8-K"], limit=1)[0]
+    assert hit.cik == "0001554225"
+    assert hit.doc_url == (
+        "https://www.sec.gov/Archives/edgar/data/1554225/000160423214000006/ex10_7.htm"
+    )

@@ -16,6 +16,7 @@ class SECFiling:
     title: str
     form_type: str
     filed_date: str
+    cik: str | None = None
     doc_url: str | None = None
 
 
@@ -29,6 +30,17 @@ class SECClient:
             self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._min_interval = min_interval
         self._last_call = 0.0
+
+    @staticmethod
+    def build_doc_url(cik: str, accession_no: str, filename: str) -> str:
+        """Construct the EDGAR Archives URL for a filing document.
+
+        Path form: /Archives/edgar/data/{CIK}/{ACCESSION_NO_DASHES_STRIPPED}/{filename}
+        CIK is used without leading zeros.
+        """
+        cik_int = str(int(cik))
+        accn = accession_no.replace("-", "")
+        return f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accn}/{filename}"
 
     @staticmethod
     def html_to_text(html: str) -> str:
@@ -83,12 +95,22 @@ class SECClient:
         for h in hits:
             src = h.get("_source", {})
             names = src.get("display_names") or ["Unknown"]
+            # `_id` is "{accession}:{filename}".
+            _id = h.get("_id", "")
+            accession_no, _, filename = _id.partition(":")
+            ciks = src.get("ciks") or []
+            cik = ciks[0] if ciks else None
+            doc_url = None
+            if cik and accession_no and filename:
+                doc_url = self.build_doc_url(cik, accession_no, filename)
             out.append(
                 SECFiling(
-                    accession_no=h.get("_id", "").split(":")[0],
+                    accession_no=accession_no,
                     title=names[0],
                     form_type=src.get("form", ""),
                     filed_date=src.get("file_date", ""),
+                    cik=cik,
+                    doc_url=doc_url,
                 )
             )
         return out

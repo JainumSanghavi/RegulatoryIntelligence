@@ -151,9 +151,7 @@ This is being built in phases; each phase is independently testable.
 | 4 | Monitor + scheduling: APScheduler SEC polling, diff detection, change-log | ⬜ Planned |
 | 5 | API + UI: FastAPI endpoints, minimal web UI, demo polish | ⬜ Planned |
 
-**What works today:** the full retrieval spine — ingest live SEC filings + synthetic internal docs into Qdrant, then ask a question and get back ranked, jurisdiction-filtered, LLM-reranked passages with metadata and relevance rationales. 40 automated tests pass, plus a live end-to-end test against real models.
-
-**Known limitation (next up):** SEC ingestion currently indexes filing *metadata* (title, form type, date) rather than full filing *bodies* — the document-fetch path exists and is tested but isn't yet wired into ingestion. Wiring it is the immediate next task and feeds directly into Phase 2.
+**What works today:** the full retrieval spine — ingest **full-text live SEC filings** (real filing bodies, fetched and cached from EDGAR) + synthetic internal docs into Qdrant, then ask a question and get back ranked, jurisdiction-filtered, LLM-reranked passages with metadata and relevance rationales. 45 automated tests pass, plus a live end-to-end test against real models. Example: a query about insider-trading blackout windows surfaces the relevant clauses from real public companies' insider-trading policies, each with a one-line relevance rationale.
 
 > Note: the agents shown in §3 beyond the Retriever (Analyst, Impact Assessor, Reporter, Evaluator, Monitor, Orchestrator) are the designed architecture; they are implemented across Phases 2–4. The retrieval foundation they all build on is complete today.
 
